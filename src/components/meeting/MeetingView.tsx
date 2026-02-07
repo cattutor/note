@@ -97,6 +97,8 @@ export function MeetingView() {
           </div>
           <div className="flex items-center gap-3">
             <span>컨텍스트: {settings.context}</span>
+            <span>STT: {settings.sourceLanguage === "ko" ? "한국어" : "영어"}</span>
+            <span>번역: {settings.apiKeys.gemini ? "Gemini" : settings.apiKeys.deepL ? "DeepL" : "Built-in"}</span>
             <span
               className={`flex items-center gap-1 ${
                 isRecording ? "text-red-400" : "text-zinc-600"
@@ -107,7 +109,9 @@ export function MeetingView() {
                   isRecording ? "bg-red-500 animate-pulse" : "bg-zinc-700"
                 }`}
               />
-              {isRecording ? "녹음 중" : "대기"}
+              {isRecording
+                ? mode === "live" ? "라이브 녹음 중" : "데모 재생 중"
+                : "대기"}
             </span>
           </div>
         </footer>

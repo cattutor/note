@@ -74,7 +74,8 @@ export function useMeeting() {
     let lastUtteranceTime = 0;
     let speakerCount = 0;
 
-    const hasElevenLabs = !!state.settings.apiKeys.elevenLabs;
+    // STT 언어 설정: sourceLanguage에 따라 결정
+    const sttLang = state.settings.sourceLanguage === "ko" ? "ko-KR" : "en-US";
 
     // 3초 이상 침묵 후 발화 → 화자 변경으로 추정
     const SILENCE_THRESHOLD_MS = 3000;
@@ -166,7 +167,7 @@ export function useMeeting() {
       onEnd: () => {
         // 자동 재시작은 STTController 내부에서 처리
       },
-    }, "en-US", hasElevenLabs);
+    }, sttLang, false);
 
     sttRef.current = stt;
     const started = await stt.start();
