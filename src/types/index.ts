@@ -71,6 +71,13 @@ export interface WSEvents {
   };
 }
 
+/** API 키 설정 */
+export interface ApiKeys {
+  elevenLabs?: string;
+  deepL?: string;
+  gemini?: string;
+}
+
 /** 앱 전체 설정 */
 export interface AppSettings {
   viewMode: InterpreterViewMode;
@@ -80,6 +87,7 @@ export interface AppSettings {
   sourceLanguage: Language;
   targetLanguage: Language;
   context: string; // 번역 컨텍스트 (e.g., "게임 개발 회의")
+  apiKeys: ApiKeys;
 }
 
 /** API 응답 래퍼 */

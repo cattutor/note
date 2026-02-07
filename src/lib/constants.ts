@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sourceLanguage: "en",
   targetLanguage: "ko",
   context: "게임 개발 회의",
+  apiKeys: {},
 };
 
 export const SPEAKER_COLORS = [

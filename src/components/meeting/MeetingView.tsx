@@ -23,7 +23,9 @@ export function MeetingView() {
     session,
     isRecording,
     partialUtterance,
+    mode,
     startDemo,
+    startLive,
     stopRecording,
     clearSession,
   } = useMeeting();
@@ -50,9 +52,11 @@ export function MeetingView() {
     <div className="h-screen flex flex-col bg-zinc-950 text-zinc-100">
       <MeetingHeader
         isRecording={isRecording}
+        recordingMode={mode}
         viewMode={settings.viewMode}
         sessionTitle={session?.title || ""}
         onStartDemo={startDemo}
+        onStartLive={startLive}
         onStopRecording={stopRecording}
         onClearSession={clearSession}
         onViewModeChange={handleViewModeChange}

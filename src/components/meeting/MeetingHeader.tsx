@@ -10,9 +10,11 @@ import type { InterpreterViewMode } from "@/types";
 
 interface MeetingHeaderProps {
   isRecording: boolean;
+  recordingMode: "idle" | "demo" | "live";
   viewMode: InterpreterViewMode;
   sessionTitle: string;
   onStartDemo: () => void;
+  onStartLive: () => void;
   onStopRecording: () => void;
   onClearSession: () => void;
   onViewModeChange: (mode: InterpreterViewMode) => void;
@@ -22,9 +24,11 @@ interface MeetingHeaderProps {
 
 export function MeetingHeader({
   isRecording,
+  recordingMode,
   viewMode,
   sessionTitle,
   onStartDemo,
+  onStartLive,
   onStopRecording,
   onClearSession,
   onViewModeChange,
@@ -55,7 +59,7 @@ export function MeetingHeader({
               {isRecording && (
                 <span className="flex items-center gap-1 text-red-400">
                   <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-                  REC
+                  {recordingMode === "live" ? "LIVE" : "DEMO"}
                 </span>
               )}
             </div>
@@ -110,13 +114,24 @@ export function MeetingHeader({
               중지
             </Button>
           ) : (
-            <Button variant="primary" size="sm" onClick={onStartDemo}>
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              데모 시작
-            </Button>
+            <>
+              {/* 라이브 녹음 버튼 */}
+              <Button variant="secondary" size="sm" onClick={onStartLive}>
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+                라이브
+              </Button>
+
+              {/* 데모 버튼 */}
+              <Button variant="primary" size="sm" onClick={onStartDemo}>
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                데모
+              </Button>
+            </>
           )}
 
           {(isRecording || sessionTitle) && (
