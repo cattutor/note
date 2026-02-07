@@ -21,35 +21,65 @@ export async function POST(request: NextRequest) {
 
     switch (service) {
       case "elevenLabs": {
-        const res = await fetch("https://api.elevenlabs.io/v1/user", {
-          headers: { "xi-api-key": apiKey },
-        });
-        valid = res.ok;
-        if (valid) {
-          const data = await res.json();
-          info = `${data.subscription?.tier || "Free"} plan`;
+        try {
+          const res = await fetch("https://api.elevenlabs.io/v1/user", {
+            headers: { "xi-api-key": apiKey },
+          });
+          valid = res.ok;
+          if (valid) {
+            const data = await res.json();
+            info = `${data.subscription?.tier || "Free"} plan`;
+          } else {
+            info = `HTTP ${res.status}: ${res.status === 401 ? "Invalid API key" : res.statusText}`;
+          }
+        } catch (e) {
+          valid = false;
+          info = `Network error: ${e instanceof Error ? e.message : "연결 실패"}`;
         }
         break;
       }
       case "deepL": {
-        const res = await fetch(
-          "https://api-free.deepl.com/v2/usage",
-          { headers: { Authorization: `DeepL-Auth-Key ${apiKey}` } }
-        );
-        valid = res.ok;
-        if (valid) {
-          const data = await res.json();
-          info = `${data.character_count || 0} / ${data.character_limit || 0} chars used`;
+        try {
+          // Try free API first, then pro API
+          let res = await fetch(
+            "https://api-free.deepl.com/v2/usage",
+            { headers: { Authorization: `DeepL-Auth-Key ${apiKey}` } }
+          );
+          if (!res.ok && res.status === 403) {
+            // Try pro endpoint
+            res = await fetch(
+              "https://api.deepl.com/v2/usage",
+              { headers: { Authorization: `DeepL-Auth-Key ${apiKey}` } }
+            );
+          }
+          valid = res.ok;
+          if (valid) {
+            const data = await res.json();
+            info = `${data.character_count || 0} / ${data.character_limit || 0} chars used`;
+          } else {
+            info = `HTTP ${res.status}: ${res.status === 403 ? "Invalid API key" : res.statusText}`;
+          }
+        } catch (e) {
+          valid = false;
+          info = `Network error: ${e instanceof Error ? e.message : "연결 실패"}`;
         }
         break;
       }
       case "gemini": {
-        // Gemini API 검증은 간단한 요청으로 확인
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-        );
-        valid = res.ok;
-        if (valid) info = "API key valid";
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+          );
+          valid = res.ok;
+          if (valid) {
+            info = "API key valid";
+          } else {
+            info = `HTTP ${res.status}: ${res.status === 400 ? "Invalid API key" : res.statusText}`;
+          }
+        } catch (e) {
+          valid = false;
+          info = `Network error: ${e instanceof Error ? e.message : "연결 실패"}`;
+        }
         break;
       }
       default:

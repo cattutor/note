@@ -251,10 +251,12 @@ function ApiKeyInput({
 }) {
   const [visible, setVisible] = useState(false);
   const [status, setStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
+  const [statusInfo, setStatusInfo] = useState("");
 
   const validate = useCallback(async () => {
     if (!value.trim()) return;
     setStatus("checking");
+    setStatusInfo("");
     try {
       const res = await fetch("/api/validate-key", {
         method: "POST",
@@ -262,9 +264,16 @@ function ApiKeyInput({
         body: JSON.stringify({ service, apiKey: value.trim() }),
       });
       const json = await res.json();
-      setStatus(json.data?.valid ? "valid" : "invalid");
-    } catch {
+      if (json.data?.valid) {
+        setStatus("valid");
+        setStatusInfo(json.data.info || "");
+      } else {
+        setStatus("invalid");
+        setStatusInfo(json.data?.info || json.error || "검증 실패");
+      }
+    } catch (e) {
       setStatus("invalid");
+      setStatusInfo(e instanceof Error ? e.message : "네트워크 오류");
     }
   }, [value, service]);
 
@@ -274,10 +283,10 @@ function ApiKeyInput({
       <span className="text-zinc-500 text-xs animate-pulse">...</span>
     ),
     valid: (
-      <span className="text-emerald-400 text-xs">OK</span>
+      <span className="text-emerald-400 text-xs" title={statusInfo}>OK</span>
     ),
     invalid: (
-      <span className="text-red-400 text-xs">X</span>
+      <span className="text-red-400 text-xs cursor-help" title={statusInfo}>X</span>
     ),
   };
 
@@ -327,6 +336,12 @@ function ApiKeyInput({
           검증
         </button>
       </div>
+      {status === "valid" && statusInfo && (
+        <p className="text-[10px] text-emerald-400 mt-1">{statusInfo}</p>
+      )}
+      {status === "invalid" && statusInfo && (
+        <p className="text-[10px] text-red-400 mt-1">{statusInfo}</p>
+      )}
     </div>
   );
 }
