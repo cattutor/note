@@ -1,32 +1,61 @@
 // ============================================================
 // STT Service — Speech-to-Text (Web Speech API wrapper)
+// + MediaRecorder 오디오 캡처 (화자 식별용)
 // ============================================================
 
 export interface STTCallbacks {
   onPartialResult: (text: string) => void;
-  onFinalResult: (text: string) => void;
+  onFinalResult: (text: string, audioBlob?: Blob) => void;
   onError: (error: string) => void;
   onEnd: () => void;
 }
 
 /**
  * Web Speech API 기반 STT 컨트롤러.
- * 브라우저 내장 음성인식을 사용하여 실시간 텍스트 변환.
+ * captureAudio=true면 MediaRecorder를 병행하여 화자 식별용 오디오도 캡처.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export class STTController {
   private recognition: any = null;
   private isRunning = false;
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
+  private captureAudio: boolean;
 
-  constructor(private callbacks: STTCallbacks, private lang: string = "en-US") {}
+  constructor(
+    private callbacks: STTCallbacks,
+    private lang: string = "en-US",
+    captureAudio: boolean = false
+  ) {
+    this.captureAudio = captureAudio;
+  }
 
-  start(): boolean {
+  async start(): Promise<boolean> {
     const w = window as any;
     const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       this.callbacks.onError("이 브라우저는 음성인식을 지원하지 않습니다.");
       return false;
+    }
+
+    // 오디오 캡처 시작 (화자 식별용)
+    if (this.captureAudio) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.mediaRecorder = new MediaRecorder(stream, {
+          mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4",
+        });
+        this.mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            this.audioChunks.push(e.data);
+          }
+        };
+        this.mediaRecorder.start(1000);
+      } catch (e) {
+        console.warn("오디오 캡처 실패, 텍스트만 사용합니다:", e);
+        this.captureAudio = false;
+      }
     }
 
     this.recognition = new SpeechRecognition();
@@ -40,7 +69,14 @@ export class STTController {
         const text = result[0].transcript;
 
         if (result.isFinal) {
-          this.callbacks.onFinalResult(text);
+          let audioBlob: Blob | undefined;
+          if (this.captureAudio && this.audioChunks.length > 0) {
+            audioBlob = new Blob(this.audioChunks, {
+              type: this.mediaRecorder?.mimeType || "audio/webm",
+            });
+            this.audioChunks = [];
+          }
+          this.callbacks.onFinalResult(text, audioBlob);
         } else {
           this.callbacks.onPartialResult(text);
         }
@@ -77,6 +113,12 @@ export class STTController {
   stop(): void {
     this.isRunning = false;
     this.recognition?.stop();
+    if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+      this.mediaRecorder.stop();
+      this.mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+    }
+    this.mediaRecorder = null;
+    this.audioChunks = [];
   }
 
   isActive(): boolean {

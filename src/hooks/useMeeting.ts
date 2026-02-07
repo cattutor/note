@@ -12,7 +12,7 @@ import { createDemoController, type DemoController } from "@/services/demo";
 import { STTController } from "@/services/stt";
 import { translateText } from "@/services/translation";
 import { getGlossary } from "@/services/glossary";
-import { fallbackIdentify } from "@/services/elevenLabs";
+import { SPEAKER_COLORS } from "@/lib/constants";
 
 export function useMeeting() {
   const { state, dispatch } = useAppContext();
@@ -62,7 +62,7 @@ export function useMeeting() {
   }, [state.currentSession, state.speakers, state.settings.context, dispatch, startSession]);
 
   /** 라이브 녹음 모드 시작 (실제 마이크 입력) */
-  const startLive = useCallback(() => {
+  const startLive = useCallback(async () => {
     if (!state.currentSession) {
       startSession("라이브 회의");
     }
@@ -70,11 +70,53 @@ export function useMeeting() {
     setMode("live");
 
     let currentPartialId = uuid();
-    const speakers = state.speakers.length > 0 ? state.speakers : [];
+    let lastSpeakerId = "";
+    let lastUtteranceTime = 0;
+    let speakerCount = 0;
+
+    const hasElevenLabs = !!state.settings.apiKeys.elevenLabs;
+
+    // 3초 이상 침묵 후 발화 → 화자 변경으로 추정
+    const SILENCE_THRESHOLD_MS = 3000;
+
+    function getOrCreateSpeaker(): Speaker {
+      const now = Date.now();
+      const silenceGap = now - lastUtteranceTime;
+
+      // 첫 발화 또는 긴 침묵 → 화자 전환
+      if (!lastSpeakerId || (lastUtteranceTime > 0 && silenceGap > SILENCE_THRESHOLD_MS)) {
+        speakerCount++;
+        const idx = (speakerCount - 1) % SPEAKER_COLORS.length;
+
+        // 기존 등록된 화자가 있으면 순환
+        if (state.speakers.length > 0) {
+          const speaker = state.speakers[(speakerCount - 1) % state.speakers.length];
+          lastSpeakerId = speaker.id;
+          lastUtteranceTime = now;
+          return speaker;
+        }
+
+        // 자동 화자 생성
+        const newSpeaker: Speaker = {
+          id: `live-speaker-${speakerCount}`,
+          name: `화자 ${speakerCount}`,
+          color: SPEAKER_COLORS[idx],
+        };
+        dispatch({ type: "ADD_SPEAKER", payload: newSpeaker });
+        lastSpeakerId = newSpeaker.id;
+        lastUtteranceTime = now;
+        return newSpeaker;
+      }
+
+      // 짧은 침묵 → 같은 화자 유지
+      lastUtteranceTime = now;
+      const existing = state.speakers.find((s) => s.id === lastSpeakerId);
+      return existing || { id: lastSpeakerId, name: "화자", color: SPEAKER_COLORS[0] };
+    }
 
     const stt = new STTController({
       onPartialResult: (text: string) => {
-        const { speaker } = fallbackIdentify(speakers);
+        const speaker = getOrCreateSpeaker();
         const partial: Utterance = {
           id: currentPartialId,
           speakerId: speaker.id,
@@ -87,11 +129,10 @@ export function useMeeting() {
         setPartialUtterance(partial);
       },
 
-      onFinalResult: async (text: string) => {
+      onFinalResult: async (text: string, _audioBlob?: Blob) => {
         setPartialUtterance(null);
 
-        // 화자 식별
-        const { speaker } = fallbackIdentify(speakers);
+        const speaker = getOrCreateSpeaker();
 
         // 번역 수행
         const glossary = getGlossary();
@@ -125,10 +166,10 @@ export function useMeeting() {
       onEnd: () => {
         // 자동 재시작은 STTController 내부에서 처리
       },
-    }, "en-US");
+    }, "en-US", hasElevenLabs);
 
     sttRef.current = stt;
-    const started = stt.start();
+    const started = await stt.start();
     if (!started) {
       dispatch({ type: "SET_RECORDING", payload: false });
       setMode("idle");
