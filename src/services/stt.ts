@@ -84,6 +84,10 @@ export class STTController {
     };
 
     this.recognition.onerror = (event: any) => {
+      // no-speech와 aborted는 정상 동작 — 무시
+      if (event.error === "no-speech" || event.error === "aborted") {
+        return;
+      }
       this.callbacks.onError(`음성인식 오류: ${event.error}`);
     };
 
