@@ -24,6 +24,7 @@ export function MeetingView() {
     isRecording,
     partialUtterance,
     mode,
+    sttStatus,
     startDemo,
     startLive,
     stopRecording,
@@ -65,6 +66,14 @@ export function MeetingView() {
       />
 
       {session && <SpeakerList speakers={speakers} utterances={utterances} />}
+
+      {/* STT 상태 표시 바 */}
+      {mode === "live" && sttStatus && (
+        <div className="bg-zinc-900/80 border-b border-zinc-800 px-5 py-1.5 text-xs text-yellow-400 flex items-center gap-2">
+          <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+          {sttStatus}
+        </div>
+      )}
 
       <main className="flex-1 overflow-hidden">
         {showEmpty ? (

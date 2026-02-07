@@ -20,6 +20,7 @@ export function useMeeting() {
   const sttRef = useRef<STTController | null>(null);
   const [partialUtterance, setPartialUtterance] = useState<Utterance | null>(null);
   const [mode, setMode] = useState<"idle" | "demo" | "live">("idle");
+  const [sttStatus, setSttStatus] = useState<string>("");
 
   /** 새 회의 세션 시작 */
   const startSession = useCallback(
@@ -76,6 +77,7 @@ export function useMeeting() {
 
     // STT 언어 설정: sourceLanguage에 따라 결정
     const sttLang = state.settings.sourceLanguage === "ko" ? "ko-KR" : "en-US";
+    setSttStatus(`STT 시작 중... (${sttLang})`);
 
     // 3초 이상 침묵 후 발화 → 화자 변경으로 추정
     const SILENCE_THRESHOLD_MS = 3000;
@@ -117,6 +119,7 @@ export function useMeeting() {
 
     const stt = new STTController({
       onPartialResult: (text: string) => {
+        setSttStatus(`인식 중: "${text.slice(0, 30)}..."`);
         const speaker = getOrCreateSpeaker();
         const partial: Utterance = {
           id: currentPartialId,
@@ -131,6 +134,7 @@ export function useMeeting() {
       },
 
       onFinalResult: async (text: string, _audioBlob?: Blob) => {
+        setSttStatus(`번역 중: "${text.slice(0, 30)}..."`);
         setPartialUtterance(null);
 
         const speaker = getOrCreateSpeaker();
@@ -162,6 +166,7 @@ export function useMeeting() {
 
       onError: (error: string) => {
         console.error("STT Error:", error);
+        setSttStatus(`오류: ${error}`);
       },
 
       onEnd: () => {
@@ -171,7 +176,10 @@ export function useMeeting() {
 
     sttRef.current = stt;
     const started = await stt.start();
-    if (!started) {
+    if (started) {
+      setSttStatus(`대기 중 — ${sttLang === "ko-KR" ? "한국어" : "영어"}로 말씀하세요`);
+    } else {
+      setSttStatus("STT 시작 실패 — Chrome 브라우저를 사용하세요");
       dispatch({ type: "SET_RECORDING", payload: false });
       setMode("idle");
     }
@@ -197,6 +205,7 @@ export function useMeeting() {
     dispatch({ type: "CLEAR_SESSION" });
     setPartialUtterance(null);
     setMode("idle");
+    setSttStatus("");
   }, [dispatch]);
 
   return {
@@ -204,6 +213,7 @@ export function useMeeting() {
     isRecording: state.isRecording,
     partialUtterance,
     mode,
+    sttStatus,
     startSession,
     startDemo,
     startLive,
