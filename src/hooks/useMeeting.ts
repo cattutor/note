@@ -18,9 +18,13 @@ export function useMeeting() {
   const { state, dispatch } = useAppContext();
   const demoRef = useRef<DemoController | null>(null);
   const sttRef = useRef<STTController | null>(null);
+  const settingsRef = useRef(state.settings);
   const [partialUtterance, setPartialUtterance] = useState<Utterance | null>(null);
   const [mode, setMode] = useState<"idle" | "demo" | "live">("idle");
   const [sttStatus, setSttStatus] = useState<string>("");
+
+  // 항상 최신 settings를 ref에 유지 (stale closure 방지)
+  settingsRef.current = state.settings;
 
   /** 새 회의 세션 시작 */
   const startSession = useCallback(
@@ -139,14 +143,15 @@ export function useMeeting() {
 
         const speaker = getOrCreateSpeaker();
 
-        // 번역 수행
+        // 최신 settings에서 API 키 가져오기 (stale closure 방지)
+        const currentSettings = settingsRef.current;
         const glossary = getGlossary();
         const result = await translateText(
           text,
-          state.settings.context,
+          currentSettings.context,
           glossary,
-          state.settings.showTranslatorNotes,
-          state.settings.apiKeys
+          currentSettings.showTranslatorNotes,
+          currentSettings.apiKeys
         );
 
         const utterance: Utterance = {

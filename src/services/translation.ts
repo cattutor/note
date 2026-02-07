@@ -28,6 +28,9 @@ export async function translateText(
   // 2. 번역 수행 (API 키가 있으면 외부 API 사용)
   let translated: string;
 
+  const engine = apiKeys?.gemini ? "gemini" : apiKeys?.deepL ? "deepL" : "built-in";
+  console.log(`[Translation] engine=${engine}, text="${text.slice(0, 40)}...", hasKeys=${JSON.stringify(Object.keys(apiKeys || {}))}`);
+
   if (apiKeys?.gemini) {
     translated = await translateWithGemini(text, context, appliedTerms, apiKeys.gemini);
   } else if (apiKeys?.deepL) {
