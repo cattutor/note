@@ -22,15 +22,30 @@ export async function POST(request: NextRequest) {
     switch (service) {
       case "elevenLabs": {
         try {
-          const res = await fetch("https://api.elevenlabs.io/v1/user", {
+          // Try /v1/user first for subscription info
+          let res = await fetch("https://api.elevenlabs.io/v1/user", {
             headers: { "xi-api-key": apiKey },
           });
-          valid = res.ok;
-          if (valid) {
+          if (res.ok) {
+            valid = true;
             const data = await res.json();
             info = `${data.subscription?.tier || "Free"} plan`;
+          } else if (res.status === 401 || res.status === 403) {
+            // Key might have restricted scope — try /v1/voices as fallback
+            res = await fetch("https://api.elevenlabs.io/v1/voices", {
+              headers: { "xi-api-key": apiKey },
+            });
+            if (res.ok) {
+              valid = true;
+              const data = await res.json();
+              info = `Connected (${data.voices?.length || 0} voices)`;
+            } else {
+              valid = false;
+              info = `HTTP ${res.status}: ${res.status === 401 ? "Invalid API key" : "Access denied"}`;
+            }
           } else {
-            info = `HTTP ${res.status}: ${res.status === 401 ? "Invalid API key" : res.statusText}`;
+            valid = false;
+            info = `HTTP ${res.status}: ${res.statusText}`;
           }
         } catch (e) {
           valid = false;
