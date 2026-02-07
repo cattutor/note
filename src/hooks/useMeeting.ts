@@ -99,7 +99,8 @@ export function useMeeting() {
           text,
           state.settings.context,
           glossary,
-          state.settings.showTranslatorNotes
+          state.settings.showTranslatorNotes,
+          state.settings.apiKeys
         );
 
         const utterance: Utterance = {

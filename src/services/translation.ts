@@ -1,8 +1,9 @@
 // ============================================================
-// Translation Service — LLM 기반 맥락 인식 번역 엔진
+// Translation Service — 맥락 인식 번역 엔진
+// Built-in 룰 기반 + Gemini API + DeepL API 지원
 // ============================================================
 
-import type { TranslatorNote, GlossaryEntry } from "@/types";
+import type { TranslatorNote, GlossaryEntry, ApiKeys } from "@/types";
 import { applyGlossaryHints } from "./glossary";
 
 export interface TranslationResult {
@@ -12,20 +13,28 @@ export interface TranslationResult {
 
 /**
  * 맥락 인식 번역 수행.
- * 실제 프로덕션에서는 DeepL API Pro 또는 Gemini 1.5 Flash를 호출.
- * 여기서는 내장 룰 기반 + 시뮬레이션으로 구현.
+ * 우선순위: Gemini → DeepL → Built-in 룰 기반
  */
 export async function translateText(
   text: string,
   context: string,
   glossary: GlossaryEntry[],
-  includeNotes: boolean = true
+  includeNotes: boolean = true,
+  apiKeys?: ApiKeys
 ): Promise<TranslationResult> {
   // 1. 용어집 힌트 적용
   const { appliedTerms } = applyGlossaryHints(text);
 
-  // 2. 규칙 기반 번역 (데모용 — 프로덕션에서는 LLM API 호출)
-  let translated = applyRuleBasedTranslation(text, appliedTerms);
+  // 2. 번역 수행 (API 키가 있으면 외부 API 사용)
+  let translated: string;
+
+  if (apiKeys?.gemini) {
+    translated = await translateWithGemini(text, context, appliedTerms, apiKeys.gemini);
+  } else if (apiKeys?.deepL) {
+    translated = await translateWithDeepL(text, appliedTerms, apiKeys.deepL);
+  } else {
+    translated = applyRuleBasedTranslation(text, appliedTerms);
+  }
 
   // 3. 번역자 주(Notes) 생성
   const notes: TranslatorNote[] = [];
@@ -35,6 +44,108 @@ export async function translateText(
   }
 
   return { translatedText: translated, notes };
+}
+
+// --- Gemini API Translation ---
+
+async function translateWithGemini(
+  text: string,
+  context: string,
+  glossaryTerms: { source: string; target: string }[],
+  apiKey: string
+): Promise<string> {
+  try {
+    const glossaryHint = glossaryTerms.length > 0
+      ? `\n용어집: ${glossaryTerms.map(t => `${t.source}=${t.target}`).join(", ")}`
+      : "";
+
+    const prompt = `You are a professional English-Korean translator specializing in ${context}.
+Translate the following English text to natural Korean.
+- Use appropriate Korean technical terms for the ${context} domain.
+- Keep proper nouns, brand names, and technical abbreviations in English.
+- Translate naturally, not word-by-word.${glossaryHint}
+
+English: ${text}
+
+Korean translation (only the translation, no explanation):`;
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 1024,
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      console.error("Gemini API error:", res.status);
+      return applyRuleBasedTranslation(text, glossaryTerms);
+    }
+
+    const data = await res.json();
+    const result = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return result || applyRuleBasedTranslation(text, glossaryTerms);
+  } catch (e) {
+    console.error("Gemini translation failed:", e);
+    return applyRuleBasedTranslation(text, glossaryTerms);
+  }
+}
+
+// --- DeepL API Translation ---
+
+async function translateWithDeepL(
+  text: string,
+  glossaryTerms: { source: string; target: string }[],
+  apiKey: string
+): Promise<string> {
+  try {
+    // Determine if free or pro key
+    const isFreeKey = apiKey.endsWith(":fx");
+    const baseUrl = isFreeKey
+      ? "https://api-free.deepl.com/v2/translate"
+      : "https://api.deepl.com/v2/translate";
+
+    const res = await fetch(baseUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `DeepL-Auth-Key ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: [text],
+        source_lang: "EN",
+        target_lang: "KO",
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("DeepL API error:", res.status);
+      return applyRuleBasedTranslation(text, glossaryTerms);
+    }
+
+    const data = await res.json();
+    let translated = data.translations?.[0]?.text || "";
+
+    // Apply glossary terms on top of DeepL result
+    if (translated && glossaryTerms.length > 0) {
+      for (const term of glossaryTerms) {
+        const regex = new RegExp(escapeRegex(term.source), "gi");
+        translated = translated.replace(regex, term.target);
+      }
+    }
+
+    return translated || applyRuleBasedTranslation(text, glossaryTerms);
+  } catch (e) {
+    console.error("DeepL translation failed:", e);
+    return applyRuleBasedTranslation(text, glossaryTerms);
+  }
 }
 
 // --- Rule-based translation (데모 시뮬레이션) ---

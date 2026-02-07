@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { translateText } from "@/services/translation";
 import { getGlossary } from "@/services/glossary";
-import type { ApiResponse } from "@/types";
+import type { ApiKeys, ApiResponse } from "@/types";
 import type { TranslationResult } from "@/services/translation";
 
 export async function POST(request: NextRequest) {
@@ -15,10 +15,12 @@ export async function POST(request: NextRequest) {
       text,
       context = "게임 개발 회의",
       includeNotes = true,
+      apiKeys,
     } = body as {
       text: string;
       context?: string;
       includeNotes?: boolean;
+      apiKeys?: ApiKeys;
     };
 
     if (!text || typeof text !== "string") {
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const glossary = getGlossary();
-    const result = await translateText(text, context, glossary, includeNotes);
+    const result = await translateText(text, context, glossary, includeNotes, apiKeys);
 
     return NextResponse.json({
       success: true,
