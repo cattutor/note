@@ -49,11 +49,28 @@ export async function translateText(
   return { translatedText: translated, notes };
 }
 
-// --- Gemini API Translation (429 자동 재시도 포함) ---
+// --- Gemini API Translation (큐 기반 속도 제한) ---
 
-// 요청 간 최소 간격 (Gemini Free: 15 RPM → 4초 간격)
-let lastGeminiCall = 0;
-const GEMINI_MIN_INTERVAL_MS = 4000;
+// 요청 큐: 분당 10회 이내로 유지 (Gemini Free 안전 마진)
+const geminiCallTimes: number[] = [];
+const GEMINI_RPM_LIMIT = 10;
+const GEMINI_WINDOW_MS = 60_000;
+
+async function waitForGeminiSlot(): Promise<void> {
+  // 1분 이내 호출 기록 정리
+  const now = Date.now();
+  while (geminiCallTimes.length > 0 && now - geminiCallTimes[0] > GEMINI_WINDOW_MS) {
+    geminiCallTimes.shift();
+  }
+  // 제한 초과 시 가장 오래된 호출이 1분 지날 때까지 대기
+  if (geminiCallTimes.length >= GEMINI_RPM_LIMIT) {
+    const waitMs = GEMINI_WINDOW_MS - (now - geminiCallTimes[0]) + 500;
+    console.warn(`[Gemini] RPM 제한 도달, ${(waitMs/1000).toFixed(1)}초 대기...`);
+    await new Promise((r) => setTimeout(r, waitMs));
+    return waitForGeminiSlot();
+  }
+  geminiCallTimes.push(Date.now());
+}
 
 async function translateWithGemini(
   text: string,
@@ -63,13 +80,7 @@ async function translateWithGemini(
   retryCount = 0
 ): Promise<string> {
   try {
-    // 속도 제한: 이전 요청 후 최소 간격 대기
-    const now = Date.now();
-    const elapsed = now - lastGeminiCall;
-    if (elapsed < GEMINI_MIN_INTERVAL_MS) {
-      await new Promise((r) => setTimeout(r, GEMINI_MIN_INTERVAL_MS - elapsed));
-    }
-    lastGeminiCall = Date.now();
+    await waitForGeminiSlot();
 
     const glossaryHint = glossaryTerms.length > 0
       ? `\n용어집: ${glossaryTerms.map(t => `${t.source}=${t.target}`).join(", ")}`
@@ -100,16 +111,20 @@ Korean translation (only the translation, no explanation):`;
       }
     );
 
-    // 429 Too Many Requests → 대기 후 재시도 (최대 2회)
-    if (res.status === 429 && retryCount < 2) {
-      const waitMs = (retryCount + 1) * 5000; // 5초, 10초
-      console.warn(`[Gemini] 429 rate limit, ${waitMs/1000}초 후 재시도...`);
-      await new Promise((r) => setTimeout(r, waitMs));
+    // 429 → 재시도 1회
+    if (res.status === 429 && retryCount < 1) {
+      console.warn("[Gemini] 429, 15초 후 재시도...");
+      await new Promise((r) => setTimeout(r, 15000));
       return translateWithGemini(text, context, glossaryTerms, apiKey, retryCount + 1);
     }
 
     if (!res.ok) {
-      console.error("Gemini API error:", res.status);
+      // 429는 예상 가능한 상황이므로 warn으로 처리
+      if (res.status === 429) {
+        console.warn("[Gemini] RPM 초과 — Built-in 번역으로 전환");
+      } else {
+        console.error("Gemini API error:", res.status);
+      }
       return applyRuleBasedTranslation(text, glossaryTerms);
     }
 
