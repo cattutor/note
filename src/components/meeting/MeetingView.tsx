@@ -68,7 +68,7 @@ export function MeetingView() {
 
       <main className="flex-1 overflow-hidden">
         {showEmpty ? (
-          <EmptyState onStartDemo={startDemo} />
+          <EmptyState onStartDemo={startDemo} onStartLive={startLive} />
         ) : settings.viewMode === "subtitle" ? (
           <SubtitleView
             utterances={utterances}

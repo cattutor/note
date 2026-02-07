@@ -36,28 +36,28 @@ export function MeetingHeader({
   onOpenSettings,
 }: MeetingHeaderProps) {
   return (
-    <header className="bg-zinc-900 border-b border-zinc-800 px-5 py-3">
-      <div className="flex items-center justify-between">
+    <header className="bg-zinc-900 border-b border-zinc-800 px-3 sm:px-5 py-3">
+      <div className="flex items-center justify-between gap-2">
         {/* 왼쪽: 로고 & 세션 정보 */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
               </svg>
             </div>
-            <div>
+            <div className="hidden sm:block">
               <h1 className="text-sm font-bold text-zinc-100">VoicePrint Note</h1>
               <p className="text-[10px] text-zinc-500">화자 식별 & 실시간 통역</p>
             </div>
           </div>
 
           {sessionTitle && (
-            <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400">
+            <div className="hidden md:flex items-center gap-2 text-xs text-zinc-400 truncate">
               <span className="text-zinc-600">|</span>
-              <span>{sessionTitle}</span>
+              <span className="truncate">{sessionTitle}</span>
               {isRecording && (
-                <span className="flex items-center gap-1 text-red-400">
+                <span className="flex items-center gap-1 text-red-400 shrink-0">
                   <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
                   {recordingMode === "live" ? "LIVE" : "DEMO"}
                 </span>
@@ -67,9 +67,9 @@ export function MeetingHeader({
         </div>
 
         {/* 오른쪽: 컨트롤 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* 뷰 모드 토글 */}
-          <div className="hidden sm:flex items-center bg-zinc-800 rounded-lg p-0.5">
+          <div className="hidden lg:flex items-center bg-zinc-800 rounded-lg p-0.5">
             <button
               onClick={() => onViewModeChange("subtitle")}
               className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
@@ -117,19 +117,19 @@ export function MeetingHeader({
             <>
               {/* 라이브 녹음 버튼 */}
               <Button variant="secondary" size="sm" onClick={onStartLive}>
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
-                라이브
+                <span className="hidden sm:inline">라이브</span>
               </Button>
 
               {/* 데모 버튼 */}
               <Button variant="primary" size="sm" onClick={onStartDemo}>
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                데모
+                <span className="hidden sm:inline">데모</span>
               </Button>
             </>
           )}
