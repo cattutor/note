@@ -9,7 +9,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showOriginal: true,
   showTranslation: true,
   showTranslatorNotes: true,
-  sourceLanguage: "en",
+  sourceLanguage: "ko",
   targetLanguage: "ko",
   context: "게임 개발 회의",
   apiKeys: {},

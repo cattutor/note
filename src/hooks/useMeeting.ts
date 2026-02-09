@@ -4,7 +4,7 @@
 // useMeeting — 회의 세션 관리 훅 (데모 + 라이브 모드)
 // ============================================================
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
 import type { MeetingSession, Utterance, Speaker } from "@/types";
 import { useAppContext } from "@/store";
@@ -219,6 +219,18 @@ export function useMeeting() {
     setMode("idle");
     setSttStatus("");
   }, [dispatch]);
+
+  // 라이브 중 sourceLanguage가 변경되면 STT 언어 재시작
+  useEffect(() => {
+    if (mode === "live" && sttRef.current) {
+      const newLang = state.settings.sourceLanguage === "ko" ? "ko-KR" : "en-US";
+      setSttStatus(`언어 전환 중... (${newLang})`);
+      sttRef.current.setLanguage(newLang);
+      setTimeout(() => {
+        setSttStatus(`대기 중 — ${newLang === "ko-KR" ? "한국어" : "영어"}로 말씀하세요`);
+      }, 500);
+    }
+  }, [state.settings.sourceLanguage, mode]);
 
   return {
     session: state.currentSession,

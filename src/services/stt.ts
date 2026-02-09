@@ -147,10 +147,24 @@ export class STTController {
   }
 
   setLanguage(lang: string): void {
+    if (this.lang === lang) return;
     this.lang = lang;
     if (this.isRunning) {
-      this.stop();
-      this.start();
+      // 기존 인식을 중지하고 새 언어로 재시작
+      this.isRunning = false;
+      this.recognition?.stop();
+      // 약간의 딜레이 후 재시작 (Chrome 안정성)
+      setTimeout(() => {
+        this.isRunning = true;
+        if (this.recognition) {
+          this.recognition.lang = lang;
+          try {
+            this.recognition.start();
+          } catch {
+            this.isRunning = false;
+          }
+        }
+      }, 200);
     }
   }
 }
