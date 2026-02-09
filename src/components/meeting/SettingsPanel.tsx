@@ -60,6 +60,20 @@ async function validateClientSide(
   }
 }
 
+/** Basic key format check when network validation is unavailable */
+function checkKeyFormat(service: string, key: string): boolean {
+  switch (service) {
+    case "elevenLabs":
+      return key.length >= 20; // sk_ keys or legacy keys
+    case "gemini":
+      return key.startsWith("AIza") && key.length >= 30;
+    case "deepL":
+      return key.length >= 20;
+    default:
+      return key.length > 0;
+  }
+}
+
 interface SettingsPanelProps {
   settings: AppSettings;
   isOpen: boolean;
@@ -311,18 +325,23 @@ function ApiKeyInput({
     setStatusInfo("");
     const key = value.trim();
 
+    // 1) Try client-side direct validation
     try {
-      // Client-side direct validation (bypasses server-side network issues)
       const result = await validateClientSide(service, key);
       if (result) {
         setStatus("valid");
         setStatusInfo(result.info);
         return;
       }
+      // result === null means key was explicitly rejected (e.g. 401)
+      setStatus("invalid");
+      setStatusInfo("API 키가 유효하지 않습니다.");
+      return;
     } catch {
-      // Client-side failed (CORS etc), try server-side fallback
+      // Client-side failed (CORS/network), try server fallback
     }
 
+    // 2) Try server-side validation
     try {
       const res = await fetch("/api/validate-key", {
         method: "POST",
@@ -333,13 +352,27 @@ function ApiKeyInput({
       if (json.data?.valid) {
         setStatus("valid");
         setStatusInfo(json.data.info || "");
-      } else {
-        setStatus("invalid");
-        setStatusInfo(json.data?.info || json.error || "검증 실패");
+        return;
       }
-    } catch (e) {
+      // Check if it's a network error on server side too
+      const serverInfo: string = json.data?.info || "";
+      if (!serverInfo.includes("Network error")) {
+        setStatus("invalid");
+        setStatusInfo(serverInfo || json.error || "검증 실패");
+        return;
+      }
+    } catch {
+      // Server also failed
+    }
+
+    // 3) Both failed — accept key with format check
+    const formatOk = checkKeyFormat(service, key);
+    if (formatOk) {
+      setStatus("valid");
+      setStatusInfo("키 저장됨 (네트워크 문제로 원격 검증 불가, 사용 시 자동 검증)");
+    } else {
       setStatus("invalid");
-      setStatusInfo(e instanceof Error ? e.message : "네트워크 오류");
+      setStatusInfo("키 형식이 올바르지 않습니다.");
     }
   }, [value, service]);
 
