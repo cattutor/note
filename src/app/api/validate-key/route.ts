@@ -22,30 +22,41 @@ export async function POST(request: NextRequest) {
     switch (service) {
       case "elevenLabs": {
         try {
-          // Try /v1/user first for subscription info
-          let res = await fetch("https://api.elevenlabs.io/v1/user", {
-            headers: { "xi-api-key": apiKey },
-          });
-          if (res.ok) {
-            valid = true;
-            const data = await res.json();
-            info = `${data.subscription?.tier || "Free"} plan`;
-          } else if (res.status === 401 || res.status === 403) {
-            // Key might have restricted scope — try /v1/voices as fallback
-            res = await fetch("https://api.elevenlabs.io/v1/voices", {
+          // Try multiple endpoints — sk_ keys with restricted scope may block some
+          const endpoints = [
+            { url: "https://api.elevenlabs.io/v1/user", label: "user" },
+            { url: "https://api.elevenlabs.io/v1/voices", label: "voices" },
+            { url: "https://api.elevenlabs.io/v1/models", label: "models" },
+          ];
+
+          for (const ep of endpoints) {
+            const res = await fetch(ep.url, {
               headers: { "xi-api-key": apiKey },
             });
             if (res.ok) {
               valid = true;
-              const data = await res.json();
-              info = `Connected (${data.voices?.length || 0} voices)`;
-            } else {
-              valid = false;
-              info = `HTTP ${res.status}: ${res.status === 401 ? "Invalid API key" : "Access denied"}`;
+              if (ep.label === "user") {
+                const data = await res.json();
+                info = `${data.subscription?.tier || "Free"} plan`;
+              } else if (ep.label === "voices") {
+                const data = await res.json();
+                info = `Connected (${data.voices?.length || 0} voices)`;
+              } else {
+                info = "API key valid";
+              }
+              break;
             }
-          } else {
-            valid = false;
-            info = `HTTP ${res.status}: ${res.statusText}`;
+            // 401 = invalid key entirely, stop trying
+            if (res.status === 401) {
+              valid = false;
+              info = "API 키가 유효하지 않습니다. 키를 다시 확인해주세요.";
+              break;
+            }
+            // 403 = scope restricted, try next endpoint
+          }
+
+          if (!valid && !info) {
+            info = "모든 엔드포인트 접근 거부됨. 키 권한을 Unrestricted로 설정해주세요.";
           }
         } catch (e) {
           valid = false;
