@@ -8,6 +8,58 @@ import React, { useState, useCallback } from "react";
 import type { AppSettings, ApiKeys } from "@/types";
 import { TRANSLATION_CONTEXTS } from "@/lib/constants";
 
+/** Client-side direct API validation (avoids server-side fetch issues) */
+async function validateClientSide(
+  service: string,
+  apiKey: string
+): Promise<{ info: string } | null> {
+  switch (service) {
+    case "elevenLabs": {
+      const endpoints = [
+        "https://api.elevenlabs.io/v1/user",
+        "https://api.elevenlabs.io/v1/voices",
+        "https://api.elevenlabs.io/v1/models",
+      ];
+      for (const url of endpoints) {
+        try {
+          const res = await fetch(url, {
+            headers: { "xi-api-key": apiKey },
+          });
+          if (res.ok) {
+            if (url.includes("/user")) {
+              const data = await res.json();
+              return { info: `${data.subscription?.tier || "Free"} plan` };
+            }
+            if (url.includes("/voices")) {
+              const data = await res.json();
+              return { info: `Connected (${data.voices?.length || 0} voices)` };
+            }
+            return { info: "API key valid" };
+          }
+          if (res.status === 401) return null;
+        } catch {
+          // CORS blocked — throw to trigger server fallback
+          throw new Error("CORS");
+        }
+      }
+      return null;
+    }
+    case "gemini": {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+      );
+      if (res.ok) return { info: "API key valid" };
+      return null;
+    }
+    case "deepL": {
+      // DeepL blocks CORS, skip client-side
+      throw new Error("CORS");
+    }
+    default:
+      return null;
+  }
+}
+
 interface SettingsPanelProps {
   settings: AppSettings;
   isOpen: boolean;
@@ -257,11 +309,25 @@ function ApiKeyInput({
     if (!value.trim()) return;
     setStatus("checking");
     setStatusInfo("");
+    const key = value.trim();
+
+    try {
+      // Client-side direct validation (bypasses server-side network issues)
+      const result = await validateClientSide(service, key);
+      if (result) {
+        setStatus("valid");
+        setStatusInfo(result.info);
+        return;
+      }
+    } catch {
+      // Client-side failed (CORS etc), try server-side fallback
+    }
+
     try {
       const res = await fetch("/api/validate-key", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service, apiKey: value.trim() }),
+        body: JSON.stringify({ service, apiKey: key }),
       });
       const json = await res.json();
       if (json.data?.valid) {
