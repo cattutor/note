@@ -38,9 +38,7 @@ export async function translateText(
   } else if (apiKeys?.deepL) {
     translated = await translateWithDeepL(text, appliedTerms, apiKeys.deepL, direction);
   } else {
-    translated = direction === "en→ko"
-      ? applyRuleBasedTranslation(text, appliedTerms)
-      : `[Translation] ${text}`;
+    translated = fallbackTranslation(text, appliedTerms, direction);
   }
 
   // 3. 번역자 주(Notes) 생성 (EN→KO일 때만)
@@ -134,21 +132,20 @@ English translation (only the translation, no explanation):`;
     }
 
     if (!res.ok) {
-      // 429는 예상 가능한 상황이므로 warn으로 처리
       if (res.status === 429) {
-        console.warn("[Gemini] RPM 초과 — Built-in 번역으로 전환");
+        console.warn("[Gemini] RPM 초과 — fallback 전환");
       } else {
         console.error("Gemini API error:", res.status);
       }
-      return applyRuleBasedTranslation(text, glossaryTerms);
+      return fallbackTranslation(text, glossaryTerms, direction);
     }
 
     const data = await res.json();
     const result = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    return result || applyRuleBasedTranslation(text, glossaryTerms);
+    return result || fallbackTranslation(text, glossaryTerms, direction);
   } catch (e) {
     console.error("Gemini translation failed:", e);
-    return applyRuleBasedTranslation(text, glossaryTerms);
+    return fallbackTranslation(text, glossaryTerms, direction);
   }
 }
 
@@ -185,7 +182,7 @@ async function translateWithDeepL(
 
     if (!res.ok) {
       console.error("DeepL API error:", res.status);
-      return applyRuleBasedTranslation(text, glossaryTerms);
+      return fallbackTranslation(text, glossaryTerms, direction);
     }
 
     const data = await res.json();
@@ -199,10 +196,10 @@ async function translateWithDeepL(
       }
     }
 
-    return translated || applyRuleBasedTranslation(text, glossaryTerms);
+    return translated || fallbackTranslation(text, glossaryTerms, direction);
   } catch (e) {
     console.error("DeepL translation failed:", e);
-    return applyRuleBasedTranslation(text, glossaryTerms);
+    return fallbackTranslation(text, glossaryTerms, direction);
   }
 }
 
@@ -296,6 +293,19 @@ const TRANSLATION_RULES: TranslationRule[] = [
     replacement: "제 소리 들리시나요?",
   },
 ];
+
+/** 번역 실패 시 방향에 따른 fallback */
+function fallbackTranslation(
+  text: string,
+  glossaryTerms: { source: string; target: string }[],
+  direction: "en→ko" | "ko→en"
+): string {
+  if (direction === "en→ko") {
+    return applyRuleBasedTranslation(text, glossaryTerms);
+  }
+  // KO→EN: API 없이는 번역 불가, 원문 그대로 반환
+  return text;
+}
 
 function applyRuleBasedTranslation(
   text: string,

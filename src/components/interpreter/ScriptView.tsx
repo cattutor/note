@@ -14,6 +14,7 @@ interface ScriptViewProps {
   speakers: Speaker[];
   partialUtterance: Utterance | null;
   showNotes: boolean;
+  sourceLanguage?: "en" | "ko";
 }
 
 export function ScriptView({
@@ -21,6 +22,7 @@ export function ScriptView({
   speakers,
   partialUtterance,
   showNotes,
+  sourceLanguage = "en",
 }: ScriptViewProps) {
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -39,10 +41,10 @@ export function ScriptView({
 
   return (
     <div className="grid grid-cols-2 gap-0 h-full border border-zinc-800 rounded-xl overflow-hidden">
-      {/* 좌측: 영문 원문 */}
+      {/* 좌측: 원문 */}
       <div className="flex flex-col border-r border-zinc-800">
         <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase tracking-wider">
-          Original (English)
+          {sourceLanguage === "ko" ? "원문 (한국어)" : "Original (English)"}
         </div>
         <div ref={leftRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {utterances.map((u) => {
@@ -71,10 +73,10 @@ export function ScriptView({
         </div>
       </div>
 
-      {/* 우측: 한국어 번역 */}
+      {/* 우측: 번역 */}
       <div className="flex flex-col">
         <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase tracking-wider">
-          Translation (Korean)
+          {sourceLanguage === "ko" ? "Translation (English)" : "번역 (한국어)"}
         </div>
         <div ref={rightRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {utterances.map((u) => {

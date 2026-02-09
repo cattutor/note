@@ -104,6 +104,7 @@ export function MeetingView() {
             speakers={speakers}
             partialUtterance={partialUtterance}
             showNotes={settings.showTranslatorNotes}
+            sourceLanguage={settings.sourceLanguage}
           />
         )}
       </main>
