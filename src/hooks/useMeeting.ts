@@ -10,7 +10,7 @@ import type { MeetingSession, Utterance, Speaker } from "@/types";
 import { useAppContext } from "@/store";
 import { createDemoController, type DemoController } from "@/services/demo";
 import { STTController } from "@/services/stt";
-import { translateText } from "@/services/translation";
+import { translateText, detectLanguage } from "@/services/translation";
 import { getGlossary } from "@/services/glossary";
 import { SPEAKER_COLORS } from "@/lib/constants";
 
@@ -80,7 +80,7 @@ export function useMeeting() {
     let speakerCount = 0;
 
     // STT 언어 설정: sourceLanguage에 따라 결정
-    const sttLang = state.settings.sourceLanguage === "ko" ? "ko-KR" : "en-US";
+    const sttLang = settingsRef.current.sourceLanguage === "ko" ? "ko-KR" : "en-US";
     setSttStatus(`STT 시작 중... (${sttLang})`);
 
     // 3초 이상 침묵 후 발화 → 화자 변경으로 추정
@@ -123,14 +123,15 @@ export function useMeeting() {
 
     const stt = new STTController({
       onPartialResult: (text: string) => {
-        setSttStatus(`인식 중: "${text.slice(0, 30)}..."`);
+        const detectedLang = detectLanguage(text);
+        setSttStatus(`인식 중 (${detectedLang === "ko" ? "한국어" : "영어"}): "${text.slice(0, 30)}..."`);
         const speaker = getOrCreateSpeaker();
         const partial: Utterance = {
           id: currentPartialId,
           speakerId: speaker.id,
           originalText: text,
           translatedText: "",
-          language: "en",
+          language: detectedLang,
           timestamp: Date.now(),
           isPartial: true,
         };
@@ -138,20 +139,26 @@ export function useMeeting() {
       },
 
       onFinalResult: async (text: string, _audioBlob?: Blob) => {
-        setSttStatus(`번역 중: "${text.slice(0, 30)}..."`);
         setPartialUtterance(null);
 
+        const detectedLang = detectLanguage(text);
         const speaker = getOrCreateSpeaker();
 
         // 최신 settings에서 API 키 가져오기 (stale closure 방지)
         const currentSettings = settingsRef.current;
         const glossary = getGlossary();
+
+        // 번역 방향 결정
+        const direction = detectedLang === "ko" ? "ko→en" as const : "en→ko" as const;
+        setSttStatus(`번역 중 (${detectedLang === "ko" ? "한→영" : "영→한"}): "${text.slice(0, 30)}..."`);
+
         const result = await translateText(
           text,
           currentSettings.context,
           glossary,
           currentSettings.showTranslatorNotes,
-          currentSettings.apiKeys
+          currentSettings.apiKeys,
+          direction
         );
 
         const utterance: Utterance = {
@@ -159,7 +166,7 @@ export function useMeeting() {
           speakerId: speaker.id,
           originalText: text,
           translatedText: result.translatedText,
-          language: "en",
+          language: detectedLang,
           timestamp: Date.now(),
           isPartial: false,
           translatorNotes: result.notes.length > 0 ? result.notes : undefined,

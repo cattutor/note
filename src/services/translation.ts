@@ -14,13 +14,15 @@ export interface TranslationResult {
 /**
  * 맥락 인식 번역 수행.
  * 우선순위: Gemini → DeepL → Built-in 룰 기반
+ * direction: "en→ko" 또는 "ko→en"
  */
 export async function translateText(
   text: string,
   context: string,
   glossary: GlossaryEntry[],
   includeNotes: boolean = true,
-  apiKeys?: ApiKeys
+  apiKeys?: ApiKeys,
+  direction: "en→ko" | "ko→en" = "en→ko"
 ): Promise<TranslationResult> {
   // 1. 용어집 힌트 적용
   const { appliedTerms } = applyGlossaryHints(text);
@@ -29,19 +31,21 @@ export async function translateText(
   let translated: string;
 
   const engine = apiKeys?.gemini ? "gemini" : apiKeys?.deepL ? "deepL" : "built-in";
-  console.log(`[Translation] engine=${engine}, text="${text.slice(0, 40)}...", hasKeys=${JSON.stringify(Object.keys(apiKeys || {}))}`);
+  console.log(`[Translation] engine=${engine}, direction=${direction}, text="${text.slice(0, 40)}...", hasKeys=${JSON.stringify(Object.keys(apiKeys || {}))}`);
 
   if (apiKeys?.gemini) {
-    translated = await translateWithGemini(text, context, appliedTerms, apiKeys.gemini);
+    translated = await translateWithGemini(text, context, appliedTerms, apiKeys.gemini, 0, direction);
   } else if (apiKeys?.deepL) {
-    translated = await translateWithDeepL(text, appliedTerms, apiKeys.deepL);
+    translated = await translateWithDeepL(text, appliedTerms, apiKeys.deepL, direction);
   } else {
-    translated = applyRuleBasedTranslation(text, appliedTerms);
+    translated = direction === "en→ko"
+      ? applyRuleBasedTranslation(text, appliedTerms)
+      : `[Translation] ${text}`;
   }
 
-  // 3. 번역자 주(Notes) 생성
+  // 3. 번역자 주(Notes) 생성 (EN→KO일 때만)
   const notes: TranslatorNote[] = [];
-  if (includeNotes) {
+  if (includeNotes && direction === "en→ko") {
     const detectedIdioms = detectIdioms(text);
     notes.push(...detectedIdioms);
   }
@@ -77,7 +81,8 @@ async function translateWithGemini(
   context: string,
   glossaryTerms: { source: string; target: string }[],
   apiKey: string,
-  retryCount = 0
+  retryCount = 0,
+  direction: "en→ko" | "ko→en" = "en→ko"
 ): Promise<string> {
   try {
     await waitForGeminiSlot();
@@ -86,7 +91,8 @@ async function translateWithGemini(
       ? `\n용어집: ${glossaryTerms.map(t => `${t.source}=${t.target}`).join(", ")}`
       : "";
 
-    const prompt = `You are a professional English-Korean translator specializing in ${context}.
+    const prompt = direction === "en→ko"
+      ? `You are a professional English-Korean translator specializing in ${context}.
 Translate the following English text to natural Korean.
 - Use appropriate Korean technical terms for the ${context} domain.
 - Keep proper nouns, brand names, and technical abbreviations in English.
@@ -94,7 +100,16 @@ Translate the following English text to natural Korean.
 
 English: ${text}
 
-Korean translation (only the translation, no explanation):`;
+Korean translation (only the translation, no explanation):`
+      : `You are a professional Korean-English translator specializing in ${context}.
+Translate the following Korean text to natural English.
+- Use appropriate English technical terms for the ${context} domain.
+- Keep Korean proper nouns in their romanized form if widely known.
+- Translate naturally, not word-by-word.${glossaryHint}
+
+Korean: ${text}
+
+English translation (only the translation, no explanation):`;
 
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -115,7 +130,7 @@ Korean translation (only the translation, no explanation):`;
     if (res.status === 429 && retryCount < 1) {
       console.warn("[Gemini] 429, 15초 후 재시도...");
       await new Promise((r) => setTimeout(r, 15000));
-      return translateWithGemini(text, context, glossaryTerms, apiKey, retryCount + 1);
+      return translateWithGemini(text, context, glossaryTerms, apiKey, retryCount + 1, direction);
     }
 
     if (!res.ok) {
@@ -142,7 +157,8 @@ Korean translation (only the translation, no explanation):`;
 async function translateWithDeepL(
   text: string,
   glossaryTerms: { source: string; target: string }[],
-  apiKey: string
+  apiKey: string,
+  direction: "en→ko" | "ko→en" = "en→ko"
 ): Promise<string> {
   try {
     // Determine if free or pro key
@@ -150,6 +166,9 @@ async function translateWithDeepL(
     const baseUrl = isFreeKey
       ? "https://api-free.deepl.com/v2/translate"
       : "https://api.deepl.com/v2/translate";
+
+    const sourceLang = direction === "en→ko" ? "EN" : "KO";
+    const targetLang = direction === "en→ko" ? "KO" : "EN-US";
 
     const res = await fetch(baseUrl, {
       method: "POST",
@@ -159,8 +178,8 @@ async function translateWithDeepL(
       },
       body: JSON.stringify({
         text: [text],
-        source_lang: "EN",
-        target_lang: "KO",
+        source_lang: sourceLang,
+        target_lang: targetLang,
       }),
     });
 
@@ -360,4 +379,13 @@ function detectIdioms(text: string): TranslatorNote[] {
 
 function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** 텍스트의 언어를 감지 (한글 비율 기반) */
+export function detectLanguage(text: string): "ko" | "en" {
+  const koreanChars = text.match(/[\uAC00-\uD7AF\u3130-\u318F]/g);
+  const totalAlpha = text.match(/[a-zA-Z\uAC00-\uD7AF\u3130-\u318F]/g);
+  if (!totalAlpha || totalAlpha.length === 0) return "en";
+  const koreanRatio = (koreanChars?.length || 0) / totalAlpha.length;
+  return koreanRatio > 0.3 ? "ko" : "en";
 }

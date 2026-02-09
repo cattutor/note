@@ -69,9 +69,20 @@ export function MeetingView() {
 
       {/* STT 상태 표시 바 */}
       {mode === "live" && sttStatus && (
-        <div className="bg-zinc-900/80 border-b border-zinc-800 px-5 py-1.5 text-xs text-yellow-400 flex items-center gap-2">
-          <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
-          {sttStatus}
+        <div className="bg-zinc-900/80 border-b border-zinc-800 px-5 py-1.5 text-xs text-yellow-400 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+            {sttStatus}
+          </div>
+          <button
+            onClick={() => {
+              const newLang = settings.sourceLanguage === "en" ? "ko" : "en";
+              handleSettingsUpdate({ sourceLanguage: newLang as "en" | "ko" });
+            }}
+            className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-[10px] font-medium"
+          >
+            {settings.sourceLanguage === "en" ? "EN → 한국어로 전환" : "KO → English로 전환"}
+          </button>
         </div>
       )}
 
