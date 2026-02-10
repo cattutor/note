@@ -27,9 +27,9 @@ export const SPEAKER_COLORS = [
 ];
 
 export const DEFAULT_SPEAKERS: Speaker[] = [
-  { id: "speaker-1", name: "James", title: "Art Director", color: SPEAKER_COLORS[0] },
-  { id: "speaker-2", name: "김팀장", title: "Team Lead", color: SPEAKER_COLORS[1] },
-  { id: "speaker-3", name: "Sarah", title: "Game Designer", color: SPEAKER_COLORS[2] },
+  { id: "speaker-1", name: "Speaker01", color: SPEAKER_COLORS[0] },
+  { id: "speaker-2", name: "Speaker02", color: SPEAKER_COLORS[1] },
+  { id: "speaker-3", name: "Speaker03", color: SPEAKER_COLORS[2] },
 ];
 
 /** 데모용 기본 용어집 */

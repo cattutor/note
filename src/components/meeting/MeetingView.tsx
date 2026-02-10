@@ -15,6 +15,7 @@ import { SubtitleView } from "@/components/interpreter/SubtitleView";
 import { ScriptView } from "@/components/interpreter/ScriptView";
 import { GlossaryPanel } from "@/components/glossary/GlossaryPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { MeetingMinutesPanel } from "./MeetingMinutesPanel";
 import type { AppSettings, InterpreterViewMode } from "@/types";
 
 export function MeetingView() {
@@ -25,15 +26,18 @@ export function MeetingView() {
     partialUtterance,
     mode,
     sttStatus,
+    translationEnabled,
     startDemo,
     startLive,
     stopRecording,
     clearSession,
+    toggleTranslation,
   } = useMeeting();
   const { glossary, addEntry, removeEntry } = useGlossary();
 
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [minutesOpen, setMinutesOpen] = useState(false);
 
   const { settings, speakers } = state;
   const utterances = session?.utterances || [];
@@ -74,15 +78,29 @@ export function MeetingView() {
             <span className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
             {sttStatus}
           </div>
-          <button
-            onClick={() => {
-              const newLang = settings.sourceLanguage === "en" ? "ko" : "en";
-              handleSettingsUpdate({ sourceLanguage: newLang as "en" | "ko" });
-            }}
-            className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-[10px] font-medium"
-          >
-            {settings.sourceLanguage === "en" ? "EN → 한국어로 전환" : "KO → English로 전환"}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 번역 토글 */}
+            <button
+              onClick={toggleTranslation}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                translationEnabled
+                  ? "bg-blue-600 text-white"
+                  : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+              }`}
+            >
+              {translationEnabled ? "번역 ON" : "번역 OFF"}
+            </button>
+            {/* 언어 전환 */}
+            <button
+              onClick={() => {
+                const newLang = settings.sourceLanguage === "en" ? "ko" : "en";
+                handleSettingsUpdate({ sourceLanguage: newLang as "en" | "ko" });
+              }}
+              className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors text-[10px] font-medium"
+            >
+              {settings.sourceLanguage === "en" ? "EN → 한국어" : "KO → English"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -117,9 +135,17 @@ export function MeetingView() {
             <span>용어집 {glossary.length}개</span>
           </div>
           <div className="flex items-center gap-3">
-            <span>컨텍스트: {settings.context}</span>
+            {/* 회의록 생성 버튼 — 녹음 중이 아닐 때, 발화가 있을 때만 표시 */}
+            {!isRecording && utterances.length > 0 && (
+              <button
+                onClick={() => setMinutesOpen(true)}
+                className="px-2.5 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition-colors"
+              >
+                회의록 생성
+              </button>
+            )}
             <span>STT: {settings.sourceLanguage === "ko" ? "한국어" : "영어"}</span>
-            <span>번역: {settings.apiKeys.gemini ? "Gemini" : settings.apiKeys.deepL ? "DeepL" : "Built-in"}</span>
+            <span>번역: {translationEnabled ? (settings.apiKeys.gemini ? "Gemini" : settings.apiKeys.deepL ? "DeepL" : "Built-in") : "OFF"}</span>
             <span
               className={`flex items-center gap-1 ${
                 isRecording ? "text-red-400" : "text-zinc-600"
@@ -151,6 +177,15 @@ export function MeetingView() {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onUpdate={handleSettingsUpdate}
+      />
+
+      <MeetingMinutesPanel
+        isOpen={minutesOpen}
+        onClose={() => setMinutesOpen(false)}
+        utterances={utterances}
+        speakers={speakers}
+        apiKeys={settings.apiKeys}
+        context={settings.context}
       />
     </div>
   );
