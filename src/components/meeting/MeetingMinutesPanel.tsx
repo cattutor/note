@@ -28,6 +28,7 @@ export function MeetingMinutesPanel({
   const [minutes, setMinutes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sttWait, setSttWait] = useState("");
 
   const getSpeakerName = (id: string) =>
     speakers.find((s) => s.id === id)?.name || "Unknown";
@@ -79,32 +80,52 @@ ${transcript}
 간결하고 명확하게 작성해주세요.`;
 
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKeys.gemini}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.4,
-              maxOutputTokens: 4096,
-            },
-          }),
-        }
-      );
+      const maxRetries = 3;
+      let lastRes: Response | null = null;
 
-      if (!res.ok) {
-        if (res.status === 429) {
-          setError("Gemini API 요청 한도 초과. 잠시 후 다시 시도해주세요.");
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (attempt > 0) {
+          const waitSec = attempt * 20;
+          setError("");
+          setMinutes("");
+          setLoading(true);
+          for (let s = waitSec; s > 0; s--) {
+            setSttWait(`API 한도 초과 — ${s}초 후 재시도 (${attempt}/${maxRetries})`);
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+          setSttWait("");
+        }
+
+        lastRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKeys.gemini}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.4,
+                maxOutputTokens: 4096,
+              },
+            }),
+          }
+        );
+
+        if (lastRes.ok) break;
+        if (lastRes.status !== 429) break;
+      }
+
+      if (!lastRes || !lastRes.ok) {
+        if (lastRes?.status === 429) {
+          setError("Gemini API 한도 초과. 1분 후 다시 시도해주세요. (무료 티어: 분당 ~15회)");
         } else {
-          setError(`Gemini API 오류: ${res.status}`);
+          setError(`Gemini API 오류: ${lastRes?.status}`);
         }
         setLoading(false);
         return;
       }
 
-      const data = await res.json();
+      const data = await lastRes.json();
       const result = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
       if (result) {
         setMinutes(result);
@@ -167,7 +188,9 @@ ${transcript}
           {loading && (
             <div className="text-center py-8">
               <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-zinc-400 text-sm">회의록을 생성하고 있습니다...</p>
+              <p className="text-zinc-400 text-sm">
+                {sttWait || "회의록을 생성하고 있습니다..."}
+              </p>
             </div>
           )}
 
