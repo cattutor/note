@@ -129,58 +129,55 @@ export function useMeeting() {
     }
 
     /** partial 또는 final 텍스트를 utterance로 커밋 */
-    async function commitUtterance(text: string) {
+    function commitUtterance(text: string) {
       if (!text.trim()) return;
+
+      // ID를 즉시 확보하고 새 ID로 교체 (race condition 방지)
+      const utteranceId = currentPartialId;
+      currentPartialId = uuid();
+      lastPartialText = "";
 
       const detectedLang = detectLanguage(text);
       const speaker = getOrCreateSpeaker();
-      const currentSettings = settingsRef.current;
 
-      let translatedText = "";
+      // 원문 즉시 기록 (번역은 나중에 업데이트)
+      const utterance: Utterance = {
+        id: utteranceId,
+        speakerId: speaker.id,
+        originalText: text,
+        translatedText: "",
+        language: detectedLang,
+        timestamp: Date.now(),
+        isPartial: false,
+      };
+      dispatch({ type: "ADD_UTTERANCE", payload: utterance });
 
-      // 번역이 활성화된 경우에만 번역 수행
+      // 번역이 활성화된 경우 비동기로 번역 후 업데이트
       if (translationEnabledRef.current) {
+        const currentSettings = settingsRef.current;
         const glossary = getGlossary();
         const direction = detectedLang === "ko" ? "ko→en" as const : "en→ko" as const;
-        setSttStatus(`번역 중 (${detectedLang === "ko" ? "한→영" : "영→한"}): "${text.slice(0, 30)}..."`);
 
-        const result = await translateText(
+        translateText(
           text,
           currentSettings.context,
           glossary,
           currentSettings.showTranslatorNotes,
           currentSettings.apiKeys,
           direction
-        );
-        translatedText = result.translatedText;
-
-        const utterance: Utterance = {
-          id: currentPartialId,
-          speakerId: speaker.id,
-          originalText: text,
-          translatedText,
-          language: detectedLang,
-          timestamp: Date.now(),
-          isPartial: false,
-          translatorNotes: result.notes.length > 0 ? result.notes : undefined,
-        };
-        dispatch({ type: "ADD_UTTERANCE", payload: utterance });
-      } else {
-        // 번역 없이 원문만 기록
-        const utterance: Utterance = {
-          id: currentPartialId,
-          speakerId: speaker.id,
-          originalText: text,
-          translatedText: "",
-          language: detectedLang,
-          timestamp: Date.now(),
-          isPartial: false,
-        };
-        dispatch({ type: "ADD_UTTERANCE", payload: utterance });
+        ).then((result) => {
+          dispatch({
+            type: "UPDATE_UTTERANCE",
+            payload: {
+              id: utteranceId,
+              updates: {
+                translatedText: result.translatedText,
+                translatorNotes: result.notes.length > 0 ? result.notes : undefined,
+              },
+            },
+          });
+        });
       }
-
-      currentPartialId = uuid();
-      lastPartialText = "";
     }
 
     const stt = new STTController({
@@ -204,10 +201,10 @@ export function useMeeting() {
         setPartialUtterance(partial);
       },
 
-      onFinalResult: async (text: string, _audioBlob?: Blob) => {
+      onFinalResult: (text: string, _audioBlob?: Blob) => {
         setPartialUtterance(null);
         lastPartialText = "";
-        await commitUtterance(text);
+        commitUtterance(text);
         const lang = settingsRef.current.sourceLanguage === "ko" ? "한국어" : "영어";
         setSttStatus(`대기 중 — ${lang}로 말씀하세요`);
       },

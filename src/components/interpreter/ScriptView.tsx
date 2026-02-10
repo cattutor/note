@@ -4,7 +4,7 @@
 // Script View — 대본형 통역 모드 (좌우 분할)
 // ============================================================
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { Utterance, Speaker } from "@/types";
 import { SpeakerBadge } from "@/components/meeting/SpeakerBadge";
 import { TranslatorNoteTag } from "@/components/meeting/TranslatorNoteTag";
@@ -24,13 +24,27 @@ export function ScriptView({
   showNotes,
   sourceLanguage = "en",
 }: ScriptViewProps) {
-  const leftRef = useRef<HTMLDivElement>(null);
-  const rightRef = useRef<HTMLDivElement>(null);
+  const leftBottomRef = useRef<HTMLDivElement>(null);
+  const rightBottomRef = useRef<HTMLDivElement>(null);
+  const leftContainerRef = useRef<HTMLDivElement>(null);
+  const rightContainerRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
 
+  // 자동 스크롤: 새 발화가 추가될 때
   useEffect(() => {
-    leftRef.current?.scrollTo({ top: leftRef.current.scrollHeight, behavior: "smooth" });
-    rightRef.current?.scrollTo({ top: rightRef.current.scrollHeight, behavior: "smooth" });
-  }, [utterances, partialUtterance]);
+    if (autoScroll) {
+      leftBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      rightBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [utterances, partialUtterance, autoScroll]);
+
+  // 사용자가 수동 스크롤하면 자동 스크롤 해제, 맨 아래 도달 시 다시 활성화
+  const handleScroll = (container: HTMLDivElement | null) => {
+    if (!container) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 60;
+    setAutoScroll(isNearBottom);
+  };
 
   const getSpeaker = (id: string) =>
     speakers.find((s) => s.id === id) || {
@@ -40,13 +54,17 @@ export function ScriptView({
     };
 
   return (
-    <div className="grid grid-cols-2 gap-0 h-full border border-zinc-800 rounded-xl overflow-hidden">
+    <div className="grid grid-cols-2 gap-0 h-full border border-zinc-800 rounded-xl overflow-hidden relative">
       {/* 좌측: 원문 */}
       <div className="flex flex-col border-r border-zinc-800">
         <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase tracking-wider">
           {sourceLanguage === "ko" ? "원문 (한국어)" : "Original (English)"}
         </div>
-        <div ref={leftRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div
+          ref={leftContainerRef}
+          onScroll={() => handleScroll(leftContainerRef.current)}
+          className="flex-1 overflow-y-auto p-4 space-y-3"
+        >
           {utterances.map((u) => {
             const speaker = getSpeaker(u.speakerId);
             return (
@@ -70,6 +88,7 @@ export function ScriptView({
               </p>
             </div>
           )}
+          <div ref={leftBottomRef} />
         </div>
       </div>
 
@@ -78,7 +97,11 @@ export function ScriptView({
         <div className="px-4 py-2 bg-zinc-800/50 text-xs font-medium text-zinc-400 uppercase tracking-wider">
           {sourceLanguage === "ko" ? "Translation (English)" : "번역 (한국어)"}
         </div>
-        <div ref={rightRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div
+          ref={rightContainerRef}
+          onScroll={() => handleScroll(rightContainerRef.current)}
+          className="flex-1 overflow-y-auto p-4 space-y-3"
+        >
           {utterances.map((u) => {
             const speaker = getSpeaker(u.speakerId);
             return (
@@ -86,7 +109,7 @@ export function ScriptView({
                 <SpeakerBadge speaker={speaker} size="sm" />
                 <p className="mt-1 text-blue-300 text-sm leading-relaxed pl-1">
                   {u.translatedText || (
-                    <span className="text-zinc-600 italic">번역 중...</span>
+                    <span className="text-zinc-600 italic">번역 대기</span>
                   )}
                 </p>
                 {showNotes && u.translatorNotes && (
@@ -108,8 +131,23 @@ export function ScriptView({
               </p>
             </div>
           )}
+          <div ref={rightBottomRef} />
         </div>
       </div>
+
+      {/* 자동 스크롤 해제 시 하단 이동 버튼 */}
+      {!autoScroll && (
+        <button
+          onClick={() => {
+            setAutoScroll(true);
+            leftBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+            rightBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className="absolute bottom-4 right-4 px-3 py-1.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-lg transition-colors z-10"
+        >
+          최신 대사로 이동
+        </button>
+      )}
     </div>
   );
 }
